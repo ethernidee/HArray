@@ -24,7 +24,6 @@
 #endif
 
 #include "stdafx.h"
-#include <atomic>
 
 #define _RELEASE 0x1234567
 
@@ -156,22 +155,25 @@ struct BlockCell
 	uint32 ValueOrOffset;
 };
 
-struct ContentCell
-{
-	std::atomic<uchar8> ReadByTranID;
-	uchar8 Type;
-	uint32 Value;
-};
+//struct ContentCell
+//{
+//	uchar8 Type;
+//	uint32 Value;
+//};
 
 struct VarCell
 {
-	ContentCell ValueContCell;
-	ContentCell ContCell;
+	uchar8 ValueContCellType;
+	uint32 ValueContCellValue;
+	
+	uchar8 ContCellType;
+	uint32 ContCellValue;
 };
 
 struct ContentPage
 {
-	ContentCell pContent[MAX_SHORT];
+	uchar8 pType[MAX_SHORT];
+	uint32 pContent[MAX_SHORT];
 };
 
 struct VarPage
@@ -222,8 +224,9 @@ struct SegmentPath
 {
 	uchar8 Type;
 
-	ContentCell* pContentCell;
-	
+	uchar8* pContentCellType;
+	uint32* pContentCellValue;
+
 	BlockCell* pBlockCell;
 	uint32 StartBlockOffset;
 

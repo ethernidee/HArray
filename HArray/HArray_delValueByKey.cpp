@@ -82,7 +82,7 @@ void HArray::releaseVarCell(VarCell* pVarCell, uint32 varOffset)
 
 	memset(pVarCell, 0, sizeof(VarCell));
 
-	pVarCell->ValueContCell.Value = tailReleasedVarOffset;
+	pVarCell->ValueContCellValue = tailReleasedVarOffset;
 
 	tailReleasedVarOffset = varOffset;
 
@@ -200,8 +200,8 @@ bool HArray::tryReleaseBlock(SegmentPath* path, uint32 pathLen, int32& currPathL
 			//if last element offset+1, inject to content;
 			if (offsets[0] == sp.ContentOffset + 1)
 			{
-				sp.pContentCell->Type = CURRENT_VALUE_TYPE;
-				sp.pContentCell->Value = values[0];
+				*sp.pContentCellType = CURRENT_VALUE_TYPE;
+				*sp.pContentCellValue = values[0];
 
 				//release branches on block
 				for(uint32 i=0; i<countReleaseBranchCells; i++)
@@ -262,8 +262,8 @@ bool HArray::tryReleaseBlock(SegmentPath* path, uint32 pathLen, int32& currPathL
 			}
 
 			//set content cell
-			sp.pContentCell->Type = MIN_BRANCH_TYPE1 + count - 1;
-			sp.pContentCell->Value = branchOffset;
+			*sp.pContentCellType = MIN_BRANCH_TYPE1 + count - 1;
+			*sp.pContentCellValue = branchOffset;
 
 			//release block cell
 			releaseBlockCells(sp.pBlockCell - sp.BlockSubOffset, sp.StartBlockOffset);
@@ -473,8 +473,8 @@ bool HArray::dismantlingContentCells(SegmentPath* path, int32& currPathLen)
 	while (true)
 	{
 		//just remove
-		path[currPathLen].pContentCell->Type = 0;
-		path[currPathLen].pContentCell->Value = 0;
+		*path[currPathLen].pContentCellType = 0;
+		*path[currPathLen].pContentCellValue = 0;
 
 		if (currPathLen > 0)
 		{
@@ -485,7 +485,7 @@ bool HArray::dismantlingContentCells(SegmentPath* path, int32& currPathLen)
 			}
 			else
 			{
-				releaseContentCells(&path[currPathLen].pContentCell->Value,
+				releaseContentCells(path[currPathLen].pContentCellValue,
 									path[currPathLen].ContentOffset,
 									contentOffsetLen);
 
@@ -494,7 +494,7 @@ bool HArray::dismantlingContentCells(SegmentPath* path, int32& currPathLen)
 		}
 		else
 		{
-			releaseContentCells(&path[currPathLen].pContentCell->Value,
+			releaseContentCells(path[currPathLen].pContentCellValue,
 								path[currPathLen].ContentOffset,
 								contentOffsetLen);
 
@@ -528,10 +528,10 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 
 		case BRANCH_SEGMENT_TYPE:
 		{
-			if (sp.pContentCell->Type > MIN_BRANCH_TYPE1) //not last way
+			if (*sp.pContentCellType > MIN_BRANCH_TYPE1) //not last way
 			{
 				//remove item
-				uint32 lastIndex = sp.pContentCell->Type - 1;
+				uint32 lastIndex = *sp.pContentCellType - 1;
 
 				sp.pBranchCell1->Values[sp.BranchIndex] = sp.pBranchCell1->Values[lastIndex];
 				sp.pBranchCell1->Offsets[sp.BranchIndex] = sp.pBranchCell1->Offsets[lastIndex];
@@ -539,14 +539,14 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 				sp.pBranchCell1->Values[lastIndex] = 0;
 				sp.pBranchCell1->Offsets[lastIndex] = 0;
 
-				sp.pContentCell->Type--;
+				(*sp.pContentCellType)--;
 
-				if (sp.pContentCell->Type == MIN_BRANCH_TYPE1) //last way is original ?
+				if (*sp.pContentCellType == MIN_BRANCH_TYPE1) //last way is original ?
 				{
 					if (sp.pBranchCell1->Offsets[0] == sp.ContentOffset + 1)
 					{
-						sp.pContentCell->Type = CURRENT_VALUE_TYPE;
-						sp.pContentCell->Value = sp.pBranchCell1->Values[0];
+						*sp.pContentCellType = CURRENT_VALUE_TYPE;
+						*sp.pContentCellValue = sp.pBranchCell1->Values[0];
 
 						releaseBranchCell(sp.pBranchCell1, sp.BranchOffset1);
 					}
@@ -670,10 +670,11 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 
 		case VAR_SHUNT_SEGMENT_TYPE:
 		{
-			if (sp.pVarCell->ValueContCell.Type)
+			if (sp.pVarCell->ValueContCellType)
 			{
 				//delete continue way, inject value
-				sp.pContentCell = &sp.pVarCell->ValueContCell;
+				*sp.pContentCellType = sp.pVarCell->ValueContCellType;
+				*sp.pContentCellValue = sp.pVarCell->ValueContCellValue;
 
 				releaseVarCell(sp.pVarCell, sp.VarOffset);
 
@@ -682,7 +683,7 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 			else
 			{
 				//delete continue way, value was deleted earlier
-				releaseContentCells(&sp.pContentCell->Value, sp.ContentOffset, 0);
+				releaseContentCells(sp.pContentCellValue, sp.ContentOffset, 0);
 
 				releaseVarCell(sp.pVarCell, sp.VarOffset);
 
@@ -692,11 +693,11 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 
 		case VAR_VALUE_SEGMENT_TYPE:
 		{
-			if (sp.pVarCell->ContCell.Type == CONTINUE_VAR_TYPE)
+			if (sp.pVarCell->ContCellType == CONTINUE_VAR_TYPE)
 			{
-				if (sp.pVarCell->ValueContCell.Type)
+				if (sp.pVarCell->ValueContCellType)
 				{
-					sp.pVarCell->ValueContCell.Type = 0;
+					sp.pVarCell->ValueContCellType = 0;
 				}
 
 				return false;
@@ -704,7 +705,8 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 			else
 			{
 				//was only shunted value, remove var cell
-				sp.pContentCell = &sp.pVarCell->ContCell;
+				*sp.pContentCellType = sp.pVarCell->ContCellType;
+				*sp.pContentCellValue = sp.pVarCell->ContCellValue;
 
 				releaseVarCell(sp.pVarCell, sp.VarOffset);
 
@@ -754,13 +756,14 @@ bool HArray::delValueByKey(uint32* key,
 		ContentPage* pContentPage = pContentPages[contentOffset >> 16];
 		ushort16 contentIndex = contentOffset & 0xFFFF;
 
-		ContentCell& contentCell = pContentPage->pContent[contentIndex];
-		
-		if (contentCell.Type >= ONLY_CONTENT_TYPE) //ONLY CONTENT =========================================================================================
+		uint32& contentCellValue = pContentPage->pContent[contentIndex];
+		uchar8& contentCellType = pContentPage->pType[contentIndex]; //move to type part
+
+		if (contentCellType >= ONLY_CONTENT_TYPE) //ONLY CONTENT =========================================================================================
 		{
 			uint32 restKeyLen = keyLen - keyOffset;
 
-			if (restKeyLen != (contentCell.Type - ONLY_CONTENT_TYPE))
+			if (restKeyLen != (contentCellType - ONLY_CONTENT_TYPE))
 			{
 				return false;
 			}
@@ -771,27 +774,27 @@ bool HArray::delValueByKey(uint32* key,
 
 			for (; keyOffset < keyLen; contentIndex++, keyOffset++)
 			{
-				if (pContentPage->pContent[contentIndex].Value != key[keyOffset])
+				if (pContentPage->pContent[contentIndex] != key[keyOffset])
 					return false;
 			}
 
 			//remove
-			releaseContentCells(&contentCell.Value, contentOffset, restKeyLen);
+			releaseContentCells(&contentCellValue, contentOffset, restKeyLen);
 
 			for (; origKeyOffset <= keyLen; origContentIndex++, origKeyOffset++)
 			{
-				pContentPage->pContent[origContentIndex].Type = 0;
+				pContentPage->pType[origContentIndex] = 0;
 			}
 
 			goto DISMANTLING;
 		}
 
 		uint32& keyValue = key[keyOffset];
-		uint32* pContentCellValueOrOffset = &contentCell.Value;
+		uint32* pContentCellValueOrOffset = &contentCellValue;
 
 		isVarContCell = false;
 
-		if (contentCell.Type == VAR_TYPE) //VAR =====================================================================
+		if (contentCellType == VAR_TYPE) //VAR =====================================================================
 		{
 			VarPage* pVarPage = pVarPages[(*pContentCellValueOrOffset) >> 16];
 			VarCell& varCell = pVarPage->pVar[(*pContentCellValueOrOffset) & 0xFFFF];
@@ -801,34 +804,36 @@ bool HArray::delValueByKey(uint32* key,
 				//save path
 				SegmentPath& sp = path[pathLen++];
 				sp.Type = VAR_SHUNT_SEGMENT_TYPE;
-				sp.pContentCell = &contentCell;
+				sp.pContentCellType = &contentCellType;
+				sp.pContentCellValue = &contentCellValue;
 				sp.ContentOffset = contentOffset;
 				sp.pVarCell = &varCell;
 				sp.VarOffset = *pContentCellValueOrOffset;
 
-				contentCell.Type = varCell.ContCell.Type; //read from var cell
+				contentCellType = varCell.ContCellType; //read from var cell
 
 				isVarContCell = true;
 
-				if (contentCell.Type == CONTINUE_VAR_TYPE) //CONTINUE VAR =====================================================================
+				if (contentCellType == CONTINUE_VAR_TYPE) //CONTINUE VAR =====================================================================
 				{
-					contentOffset = varCell.ContCell.Value;
+					contentOffset = varCell.ContCellValue;
 
 					goto NEXT_KEY_PART;
 				}
 				else
 				{
-					pContentCellValueOrOffset = &varCell.ContCell.Value;
+					pContentCellValueOrOffset = &varCell.ContCellValue;
 				}
 			}
 			else
 			{
-				if(varCell.ValueContCell.Type)
+				if(varCell.ValueContCellType)
 				{
 					//save path
 					SegmentPath& sp = path[pathLen++];
 					sp.Type = VAR_VALUE_SEGMENT_TYPE;
-					sp.pContentCell = &contentCell;
+					sp.pContentCellType = &contentCellType;
+					sp.pContentCellValue = &contentCellValue;
 					sp.ContentOffset = contentOffset;
 					sp.pVarCell = &varCell;
 					sp.VarOffset = *pContentCellValueOrOffset;
@@ -844,12 +849,13 @@ bool HArray::delValueByKey(uint32* key,
 		}
 		else if (keyOffset == keyLen)
 		{
-			if (contentCell.Type == VALUE_TYPE)
+			if (contentCellType == VALUE_TYPE)
 			{
 				//save path
 				SegmentPath& sp = path[pathLen++];
 				sp.Type = CURRENT_VALUE_SEGMENT_TYPE;
-				sp.pContentCell = &contentCell;
+				sp.pContentCellType = &contentCellType;
+				sp.pContentCellValue = &contentCellValue;
 				sp.ContentOffset = contentOffset;
 
 				goto DISMANTLING;
@@ -860,7 +866,7 @@ bool HArray::delValueByKey(uint32* key,
 			}
 		}
 
-		if (contentCell.Type <= MAX_BRANCH_TYPE1) //BRANCH =====================================================================
+		if (contentCellType <= MAX_BRANCH_TYPE1) //BRANCH =====================================================================
 		{
 			BranchPage* pBranchPage = pBranchPages[(*pContentCellValueOrOffset) >> 16];
 			BranchCell& branchCell = pBranchPage->pBranch[(*pContentCellValueOrOffset) & 0xFFFF];
@@ -868,14 +874,15 @@ bool HArray::delValueByKey(uint32* key,
 			//try find value in the list
 			uint32* values = branchCell.Values;
 
-			for (uint32 i = 0; i < contentCell.Type; i++)
+			for (uint32 i = 0; i < contentCellType; i++)
 			{
 				if (values[i] == keyValue)
 				{
 					//save path
 					SegmentPath& sp = path[pathLen++];
 					sp.Type = BRANCH_SEGMENT_TYPE;
-					sp.pContentCell = &contentCell;
+					sp.pContentCellType = &contentCellType;
+					sp.pContentCellValue = &contentCellValue;
 					sp.pBranchCell1 = &branchCell;
 					sp.BranchOffset1 = *pContentCellValueOrOffset;
 					sp.BranchIndex = i;
@@ -890,14 +897,15 @@ bool HArray::delValueByKey(uint32* key,
 
 			return 0;
 		}
-		else if (contentCell.Type == VALUE_TYPE)
+		else if (contentCellType == VALUE_TYPE)
 		{
 			if (keyOffset == keyLen)
 			{
 				//save path
 				SegmentPath& sp = path[pathLen++];
 				sp.Type = CURRENT_VALUE_SEGMENT_TYPE;
-				sp.pContentCell = &contentCell;
+				sp.pContentCellType = &contentCellType;
+				sp.pContentCellValue = &contentCellValue;
 				sp.ContentOffset = contentOffset;
 
 				goto DISMANTLING;
@@ -907,9 +915,9 @@ bool HArray::delValueByKey(uint32* key,
 				return false;
 			}
 		}
-		else if (contentCell.Type <= MAX_BLOCK_TYPE) //VALUE IN BLOCK ===================================================================
+		else if (contentCellType <= MAX_BLOCK_TYPE) //VALUE IN BLOCK ===================================================================
 		{
-			uchar8 idxKeyValue = (contentCell.Type - MIN_BLOCK_TYPE) * BLOCK_ENGINE_STEP;
+			uchar8 idxKeyValue = (contentCellType - MIN_BLOCK_TYPE) * BLOCK_ENGINE_STEP;
 
 			uint32 startOffset = *pContentCellValueOrOffset;
 
@@ -933,7 +941,8 @@ bool HArray::delValueByKey(uint32* key,
 					//save path
 					SegmentPath& sp = path[pathLen++];
 					sp.Type = BLOCK_VALUE_SEGMENT_TYPE;
-					sp.pContentCell = &contentCell;
+					sp.pContentCellType = &contentCellType;
+					sp.pContentCellValue = &contentCellValue;
 					sp.pBlockCell = &blockCell;
 					sp.StartBlockOffset = startOffset;
 					sp.ContentOffset = contentOffset;
@@ -963,7 +972,8 @@ bool HArray::delValueByKey(uint32* key,
 						//save path
 						SegmentPath& sp = path[pathLen++];
 						sp.Type = BLOCK_BRANCH1_SEGMENT_TYPE;
-						sp.pContentCell = &contentCell;
+						sp.pContentCellType = &contentCellType;
+						sp.pContentCellValue = &contentCellValue;
 						sp.pBlockCell = &blockCell;
 						sp.StartBlockOffset = startOffset;
 						sp.pBranchCell1 = &branchCell1;
@@ -993,7 +1003,8 @@ bool HArray::delValueByKey(uint32* key,
 						//save path
 						SegmentPath& sp = path[pathLen++];
 						sp.Type = BLOCK_BRANCH1_SEGMENT_TYPE;
-						sp.pContentCell = &contentCell;
+						sp.pContentCellType = &contentCellType;
+						sp.pContentCellValue = &contentCellValue;
 						sp.pBlockCell = &blockCell;
 						sp.StartBlockOffset = startOffset;
 						sp.pBranchCell1 = &branchCell1;
@@ -1020,7 +1031,8 @@ bool HArray::delValueByKey(uint32* key,
 						//save path
 						SegmentPath& sp = path[pathLen++];
 						sp.Type = BLOCK_BRANCH2_SEGMENT_TYPE;
-						sp.pContentCell = &contentCell;
+						sp.pContentCellType = &contentCellType;
+						sp.pContentCellValue = &contentCellValue;
 						sp.pBlockCell = &blockCell;
 						sp.StartBlockOffset = startOffset;
 						sp.pBranchCell1 = &branchCell1;
@@ -1045,7 +1057,8 @@ bool HArray::delValueByKey(uint32* key,
 				SegmentPath& sp = path[pathLen++];
 				sp.Type = BLOCK_OFFSET_SEGMENT_TYPE;
 				sp.pBlockCell = &blockCell;
-				sp.pContentCell = &contentCell;
+				sp.pContentCellType = &contentCellType;
+				sp.pContentCellValue = &contentCellValue;
 				sp.StartBlockOffset = startOffset;
 				sp.ContentOffset = contentOffset;
 				sp.BlockSubOffset = subOffset;
@@ -1061,7 +1074,7 @@ bool HArray::delValueByKey(uint32* key,
 				return false;
 			}
 		}
-		else if (contentCell.Type == CURRENT_VALUE_TYPE) //PART OF KEY =========================================================================
+		else if (contentCellType == CURRENT_VALUE_TYPE) //PART OF KEY =========================================================================
 		{
 			if (*pContentCellValueOrOffset == keyValue)
 			{
@@ -1070,7 +1083,8 @@ bool HArray::delValueByKey(uint32* key,
 					//save path
 					SegmentPath& sp = path[pathLen++];
 					sp.Type = CURRENT_VALUE_SEGMENT_TYPE;
-					sp.pContentCell = &contentCell;
+					sp.pContentCellType = &contentCellType;
+					sp.pContentCellValue = &contentCellValue;
 					sp.ContentOffset = contentOffset;
 				}
 
