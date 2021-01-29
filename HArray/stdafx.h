@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <Windows.h>
 
 #ifdef _WIN32
 typedef __int32 int32;

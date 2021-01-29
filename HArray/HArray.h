@@ -24,6 +24,7 @@
 #endif
 
 #include "HArrayBase.h"
+#include "ReadList.h"
 
 class HArray
 {
@@ -781,6 +782,11 @@ public:
 
 		BlockPagesSize = newSizeBlockPages;
 	}
+
+	//CALLBACKS ==========================================================================================================
+	ON_CONTENT_CELL_MOVED_FUNC* onContentCellMovedFunc;
+	CHECK_DEADLOCK_FUNC* checkDeadlockFunc;
+
 	//INSERT =============================================================================================================
 
 	uint32 insert(uint32* key,
@@ -802,6 +808,119 @@ public:
 
 	bool hasPartKey(uint32* key, uint32 keyLen);
 	bool delValueByKey(uint32* key, uint32 keyLen);
+
+	static void msleep(uint32 ms)
+	{
+#ifdef _WIN32
+		Sleep(ms);
+#endif
+
+#ifdef __linux__
+		usleep(ms);
+#endif
+	}
+
+	//ISREADED ===========================================================================================================
+	inline uint32 processReadByTranID(ContentCell& contentCell,
+		uchar8 readModeType,
+		uchar8 tranID,
+		ReadList* pReadList)
+	{
+		switch (readModeType)
+		{
+		case 0: //0. Without any check (ha1)
+		{
+			return contentCell.Value;
+		}
+		case 1: //1. Read data with check blocking (ha2)
+		{
+			if (contentCell.ReadByTranID.load() != tranID) //not mine blocking
+			{
+				uint32 timeout = 10000;
+
+				while (contentCell.ReadByTranID.load())
+				{
+					if (--timeout)
+					{
+						pReadList->BlockedByTranID = contentCell.ReadByTranID.load();
+						pReadList->BlockedOnValue = contentCell.Value;
+
+						msleep(1); //do time for other threads
+					}
+					else //deadlock ??
+					{
+						if (checkDeadlockFunc(tranID))
+						{
+							return 0;
+						}
+						else
+						{
+							timeout = 10000;
+						}
+					}
+				}
+			}
+
+			return contentCell.Value;
+		}
+		case 2: //2. Read data and check blocking and block with put to array blocked cell (ha2)
+		{
+			if (contentCell.ReadByTranID.load() != tranID) //not mine blocking
+			{
+				uint32 timeout = 10000;
+
+				uchar8 val = 0;
+
+				while (!contentCell.ReadByTranID.compare_exchange_weak(val, tranID)) //block
+				{
+					val = 0;
+
+					if (--timeout)
+					{
+						pReadList->BlockedByTranID = contentCell.ReadByTranID.load();
+						pReadList->BlockedOnValue = contentCell.Value;
+
+						msleep(1); //do time for other threads
+					}
+					else //deadlock ??
+					{
+						if (checkDeadlockFunc(tranID))
+						{
+							return 0;
+						}
+						else
+						{
+							timeout = 10000;
+						}
+					}
+				}
+
+				pReadList->addValue(&contentCell.ReadByTranID);
+			}
+
+			return contentCell.Value;
+		}
+		case 3: //3. Check if key blocked (ha2 for commit)
+		{
+			return contentCell.ReadByTranID.load();
+		}
+		case 4: //4. Check if key blocked, but excluded my cells
+		{
+			if (contentCell.ReadByTranID.load() == tranID)
+			{
+				return 0; //mine blocking
+			}
+			else
+			{
+				return 1; //blocked by other tran
+			}
+		}
+		default: //undefined
+		{
+			return 0;
+		}
+		}
+	}
 
 	//RANGE keys and values =============================================================================================================
 	void sortLastItem(HArrayPair* pairs,

@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\Stubs">
+      <UniqueIdentifier>{a3659e54-85cc-4ece-8d9f-eff9bea6f032}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -23,6 +26,12 @@
     </ClInclude>
     <ClInclude Include="HArray.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BinFile.h">
+      <Filter>Header Files\Stubs</Filter>
+    </ClInclude>
+    <ClInclude Include="ReadList.h">
+      <Filter>Header Files\Stubs</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

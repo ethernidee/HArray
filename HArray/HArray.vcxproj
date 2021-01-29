@@ -90,8 +90,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="BinFile.h" />
     <ClInclude Include="HArrayBase.h" />
     <ClInclude Include="HArray.h" />
+    <ClInclude Include="ReadList.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>
