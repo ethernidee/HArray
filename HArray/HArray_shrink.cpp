@@ -26,8 +26,8 @@ uint32 HArray::moveContentCells(uint32& startContentOffset,
 	uint32 shrinkLastContentOffset,
 	uint32* lastContentOffsetOnNewPages)
 {
-	uchar8* pSourceStartContentCellType = &pContentPages[startContentOffset >> 16]->pType[startContentOffset & 0xFFFF];
-	uint32* pSourceStartContentCellValue = &pContentPages[startContentOffset >> 16]->pContent[startContentOffset & 0xFFFF];
+	uchar8* pSourceStartContentCellType = &pContentPages[startContentOffset >> 16]->pContent[startContentOffset & 0xFFFF].Type;
+	uint32* pSourceStartContentCellValue = &pContentPages[startContentOffset >> 16]->pContent[startContentOffset & 0xFFFF].Value;
 
 	//identify key len
 	uint32 keyLen;
@@ -54,10 +54,10 @@ uint32 HArray::moveContentCells(uint32& startContentOffset,
 			{
 				VarCell& varCell = pVarPages[*pEndContentCellValue >> 16]->pVar[*pEndContentCellValue & 0xFFFF];
 
-				if (varCell.ContCellType == CONTINUE_VAR_TYPE ||
-					varCell.ContCellType == VALUE_TYPE ||
-					(MIN_BRANCH_TYPE1 <= varCell.ContCellType && varCell.ContCellType <= MAX_BRANCH_TYPE1) ||
-					(MIN_BLOCK_TYPE <= varCell.ContCellType && varCell.ContCellType <= MAX_BLOCK_TYPE))
+				if (varCell.ContCell.Type == CONTINUE_VAR_TYPE ||
+					varCell.ContCell.Type == VALUE_TYPE ||
+					(MIN_BRANCH_TYPE1 <= varCell.ContCell.Type && varCell.ContCell.Type <= MAX_BRANCH_TYPE1) ||
+					(MIN_BLOCK_TYPE <= varCell.ContCell.Type && varCell.ContCell.Type <= MAX_BLOCK_TYPE))
 				{
 					break; //end of key
 				}
@@ -89,8 +89,8 @@ uint32 HArray::moveContentCells(uint32& startContentOffset,
 
 			ContentPage* pContentPage = pContentPages[startContentOffset >> 16];
 			
-			uchar8& contentCellType = pContentPage->pType[startContentOffset & 0xFFFF];
-			uint32& contentCellValue = pContentPage->pContent[startContentOffset & 0xFFFF];
+			uchar8& contentCellType = pContentPage->pContent[startContentOffset & 0xFFFF].Type;
+			uint32& contentCellValue = pContentPage->pContent[startContentOffset & 0xFFFF].Value;
 
 			tailReleasedContentOffsets[keyLen] = contentCellValue;
 
@@ -147,8 +147,8 @@ uint32 HArray::moveContentCells(uint32& startContentOffset,
 
 	startContentOffset = shrinkLastContentOffset + subOffset;
 
-	pDestStartContentCellType = &newContentPages[index]->pType[lastContentOffsetOnNewPages[index]];
-	pDestStartContentCellValue = &newContentPages[index]->pContent[lastContentOffsetOnNewPages[index]];
+	pDestStartContentCellType = &newContentPages[index]->pContent[lastContentOffsetOnNewPages[index]].Type;
+	pDestStartContentCellValue = &newContentPages[index]->pContent[lastContentOffsetOnNewPages[index]].Value;
 
 	lastContentOffsetOnNewPages[index] += dataLen;
 
@@ -312,10 +312,10 @@ void HArray::shrinkContentPages()
 		{
 			VarCell& varCell = pVarPage->pVar[cell];
 
-			if (varCell.ContCellType == CONTINUE_VAR_TYPE &&
-				varCell.ContCellValue >= shrinkLastContentOffset)
+			if (varCell.ContCell.Type == CONTINUE_VAR_TYPE &&
+				varCell.ContCell.Value >= shrinkLastContentOffset)
 			{
-				currMovedLen += moveContentCells(varCell.ContCellValue, //changed
+				currMovedLen += moveContentCells(varCell.ContCell.Value, //changed
 					newContentPages,
 					countNewContentPages,
 					shrinkLastContentOffset,
@@ -341,7 +341,7 @@ void HArray::shrinkContentPages()
 			{
 				prevContentOffset = contentOffset;
 
-				contentOffset = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF];
+				contentOffset = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF].Value;
 			}
 			else
 			{
@@ -349,14 +349,14 @@ void HArray::shrinkContentPages()
 				{
 					prevContentOffset = contentOffset;
 
-					contentOffset = tailReleasedContentOffsets[i] = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF];
+					contentOffset = tailReleasedContentOffsets[i] = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF].Value;
 				}
 				else //remove in middle
 				{
-					contentOffset = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF];
+					contentOffset = pContentPages[contentOffset >> 16]->pContent[contentOffset & 0xFFFF].Value;
 
 					pContentPages[prevContentOffset >> 16]->
-						pContent[prevContentOffset & 0xFFFF] = contentOffset;
+						pContent[prevContentOffset & 0xFFFF].Value = contentOffset;
 				}
 
 				countReleasedContentCells -= (i + 1);
@@ -393,7 +393,7 @@ EXIT:
 
 			if (restLen)
 			{
-				releaseContentCells(newContentPages[i]->pContent + lastContentOffsetOnNewPages[i],
+				releaseContentCells(&newContentPages[i]->pContent[lastContentOffsetOnNewPages[i]].Value,
 					(currPage << 16) | lastContentOffsetOnNewPages[i],
 					restLen - 1);
 			}
@@ -469,8 +469,8 @@ void HArray::shrinkBranchPages()
 
 		for (uint32 cell = (page == 0 ? 1 : 0); cell < countCells; cell++)
 		{
-			uchar8& contentCellType = pContentPage->pType[cell];
-			uint32& contentCellValue = pContentPage->pContent[cell];
+			uchar8& contentCellType = pContentPage->pContent[cell].Type;
+			uint32& contentCellValue = pContentPage->pContent[cell].Value;
 
 			if (MIN_BRANCH_TYPE1 <= contentCellType && contentCellType <= MAX_BRANCH_TYPE1) //in content
 			{
@@ -525,9 +525,9 @@ void HArray::shrinkBranchPages()
 			{
 				VarCell& varCell = pVarPages[contentCellValue >> 16]->pVar[contentCellValue & 0xFFFF];
 
-				if (MIN_BRANCH_TYPE1 <= varCell.ContCellType && varCell.ContCellType <= MAX_BRANCH_TYPE1) //in content
+				if (MIN_BRANCH_TYPE1 <= varCell.ContCell.Type && varCell.ContCell.Type <= MAX_BRANCH_TYPE1) //in content
 				{
-					if (varCell.ContCellValue >= shrinkLastBranchOffset)
+					if (varCell.ContCell.Value >= shrinkLastBranchOffset)
 					{
 						uint32 newBranchOffset = 0xFFFFFFFF;
 
@@ -558,7 +558,7 @@ void HArray::shrinkBranchPages()
 						}
 
 						//get cells
-						BranchCell& srcBranchCell = pBranchPages[varCell.ContCellValue >> 16]->pBranch[varCell.ContCellValue & 0xFFFF];
+						BranchCell& srcBranchCell = pBranchPages[varCell.ContCell.Value >> 16]->pBranch[varCell.ContCell.Value & 0xFFFF];
 						BranchCell& destBranchCell = pBranchPages[newBranchOffset >> 16]->pBranch[newBranchOffset & 0xFFFF];
 
 						//copy
@@ -566,7 +566,7 @@ void HArray::shrinkBranchPages()
 						memset(&srcBranchCell, 0, sizeof(BranchCell));
 
 						//set content cell
-						varCell.ContCellValue = newBranchOffset;
+						varCell.ContCell.Value = newBranchOffset;
 					}
 				}
 			}
@@ -988,8 +988,8 @@ void HArray::shrinkBlockPages()
 
 		for (uint32 cell = (page == 0 ? 1 : 0); cell < countCells; cell++)
 		{
-			uchar8& contentCellType = pContentPage->pType[cell];
-			uint32& contentCellValue = pContentPage->pContent[cell];
+			uchar8& contentCellType = pContentPage->pContent[cell].Type;
+			uint32& contentCellValue = pContentPage->pContent[cell].Value;
 
 			if (MIN_BLOCK_TYPE <= contentCellType && contentCellType <= MAX_BLOCK_TYPE) //in content
 			{
@@ -1286,8 +1286,8 @@ void HArray::shrinkVarPages()
 
 		for (uint32 cell = (page == 0 ? 1 : 0); cell < countCells; cell++)
 		{
-			uchar8& contentCellType = pContentPage->pType[cell];
-			uint32& contentCellValue = pContentPage->pContent[cell];
+			uchar8& contentCellType = pContentPage->pContent[cell].Type;
+			uint32& contentCellValue = pContentPage->pContent[cell].Value;
 
 			if (contentCellType == VAR_TYPE)
 			{
@@ -1304,13 +1304,13 @@ void HArray::shrinkVarPages()
 						{
 							newVarOffset = tailReleasedVarOffset;
 
-							tailReleasedVarOffset = pVarPages[tailReleasedVarOffset >> 16]->pVar[tailReleasedVarOffset & 0xFFFF].ValueContCellValue;
+							tailReleasedVarOffset = pVarPages[tailReleasedVarOffset >> 16]->pVar[tailReleasedVarOffset & 0xFFFF].ValueContCell.Value;
 
 							break;
 						}
 						else
 						{
-							tailReleasedVarOffset = pVarPages[tailReleasedVarOffset >> 16]->pVar[tailReleasedVarOffset & 0xFFFF].ValueContCellValue;
+							tailReleasedVarOffset = pVarPages[tailReleasedVarOffset >> 16]->pVar[tailReleasedVarOffset & 0xFFFF].ValueContCell.Value;
 						}
 					}
 
@@ -1324,7 +1324,7 @@ void HArray::shrinkVarPages()
 					VarCell& destVarCell = pVarPages[newVarOffset >> 16]->pVar[newVarOffset & 0xFFFF];
 
 					//copy
-					destVarCell = srcVarCell;
+					memcpy(&destVarCell, &srcVarCell, sizeof(VarCell));
 					memset(&srcVarCell, 0, sizeof(VarCell));
 
 					//set content cell

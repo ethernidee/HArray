@@ -18,9 +18,6 @@
     <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="HArrayInt.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="HArrayBase.h">
       <Filter>Header Files</Filter>
     </ClInclude>
