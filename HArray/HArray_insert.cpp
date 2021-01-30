@@ -341,7 +341,34 @@ uint32 HArray::insert(uint32* key,
 				}
 				else //key is exists, update
 				{
-					pContentPage->pContent[contentIndex] = value;
+					uchar8& contentCellType = pContentPage->pType[contentIndex];
+					uint32& contentCellValue = pContentPage->pContent[contentIndex];
+
+					if (AllowValueList)
+					{
+						uint32 index;
+
+						if (contentCellType == VALUE_LIST_TYPE)
+						{
+							ValueList* pValueList = valueListPool.fromSerPointer(contentCellValue);
+							index = pValueList->addValue(value);
+						}
+						else //VALUE_TYPE
+						{
+							uint32 prevValue = contentCellValue;
+							ValueList* pValueList = valueListPool.newSerObject(contentCellValue);
+							pValueList->addValue(prevValue);
+							index = pValueList->addValue(value);
+
+							contentCellType = VALUE_LIST_TYPE;
+						}
+
+						return index;
+					}
+					else
+					{
+						contentCellValue = value;
+					}
 
 					return 0;
 				}
@@ -519,7 +546,34 @@ uint32 HArray::insert(uint32* key,
 				}
 				else //key is exists, update
 				{
-					pContentPage->pContent[contentIndex] = value;
+					uchar8& contentCellType = pContentPage->pType[contentIndex];
+					uint32& contentCellValue = pContentPage->pContent[contentIndex];
+
+					if (AllowValueList)
+					{
+						uint32 index;
+
+						if (contentCellType == VALUE_LIST_TYPE)
+						{
+							ValueList* pValueList = valueListPool.fromSerPointer(contentCellValue);
+							index = pValueList->addValue(value);
+						}
+						else //VALUE_TYPE
+						{
+							uint32 prevValue = contentCellValue;
+							ValueList* pValueList = valueListPool.newSerObject(contentCellValue);
+							pValueList->addValue(prevValue);
+							index = pValueList->addValue(value);
+
+							contentCellType = VALUE_LIST_TYPE;
+						}
+
+						return index;
+					}
+					else
+					{
+						contentCellValue = value;
+					}
 
 					return 0;
 				}
@@ -561,14 +615,41 @@ uint32 HArray::insert(uint32* key,
 			}
 			else
 			{
-				//update existing value
-				varCell.ValueContCellType = VALUE_TYPE;
-				varCell.ValueContCellValue = value;
+				//key is exists, update
+				uchar8& contentCellType = varCell.ValueContCellType;
+				uint32& contentCellValue = varCell.ValueContCellValue;
+
+				if (AllowValueList)
+				{
+					uint32 index;
+
+					if (contentCellType == VALUE_LIST_TYPE)
+					{
+						ValueList* pValueList = valueListPool.fromSerPointer(contentCellValue);
+						index = pValueList->addValue(value);
+					}
+					else //VALUE_TYPE
+					{
+						uint32 prevValue = contentCellValue;
+						ValueList* pValueList = valueListPool.newSerObject(contentCellValue);
+						pValueList->addValue(prevValue);
+						index = pValueList->addValue(value);
+
+						contentCellType = VALUE_LIST_TYPE;
+					}
+
+					return index;
+				}
+				else
+				{
+					contentCellValue = value;
+				}
 
 				return 0;
 			}
 		}
-		else if (contentCellType == VALUE_TYPE) //update existing value
+		else if (contentCellType == VALUE_TYPE ||
+				 contentCellType == VALUE_LIST_TYPE) //update existing value
 		{
 			if (keyOffset < keyLen)
 			{
@@ -612,9 +693,34 @@ uint32 HArray::insert(uint32* key,
 
 				goto FILL_KEY2;
 			}
-			else
+			else //key is exists, update
 			{
-				*pContentCellValue = value;
+				if (AllowValueList)
+				{
+					uint32 index;
+
+					if (contentCellType == VALUE_LIST_TYPE)
+					{
+						ValueList* pValueList = valueListPool.fromSerPointer(*pContentCellValue);
+						index = pValueList->addValue(value);
+					}
+					else //VALUE_TYPE
+					{
+						uint32 prevValue = *pContentCellValue;
+						ValueList* pValueList = valueListPool.newSerObject(*pContentCellValue);
+						pValueList->addValue(prevValue);
+						index = pValueList->addValue(value);
+
+						//TODO Check this row in case of bug.
+						pContentPage->pType[contentIndex] = VALUE_LIST_TYPE;
+					}
+
+					return index;
+				}
+				else
+				{
+					*pContentCellValue = value;
+				}
 
 				return 0;
 			}
