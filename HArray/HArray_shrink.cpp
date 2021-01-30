@@ -1324,7 +1324,7 @@ void HArray::shrinkVarPages()
 					VarCell& destVarCell = pVarPages[newVarOffset >> 16]->pVar[newVarOffset & 0xFFFF];
 
 					//copy
-					destVarCell = srcVarCell;
+					memcpy(&destVarCell, &srcVarCell, sizeof(VarCell));
 					memset(&srcVarCell, 0, sizeof(VarCell));
 
 					//set content cell

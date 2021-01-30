@@ -90,6 +90,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="AttrValuesPool.h" />
     <ClInclude Include="BinFile.h" />
     <ClInclude Include="HArrayBase.h" />
     <ClInclude Include="HArray.h" />

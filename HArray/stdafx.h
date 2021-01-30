@@ -58,4 +58,6 @@ const uint32 PAGE_SIZE = MAX_SHORT*2;
 const uchar8 BLOCK_SIZE = 16;
 const uchar8 ROW_LEN = 3;
 
+const uint32 MAX_ATTR_VALUES_PAGES = 4096;
+
 // TODO: reference additional headers your program requires here

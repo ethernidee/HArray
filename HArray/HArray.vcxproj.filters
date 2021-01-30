@@ -33,6 +33,9 @@
     <ClInclude Include="ReadList.h">
       <Filter>Header Files\Stubs</Filter>
     </ClInclude>
+    <ClInclude Include="AttrValuesPool.h">
+      <Filter>Header Files\Stubs</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">

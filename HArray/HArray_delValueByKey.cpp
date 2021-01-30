@@ -723,6 +723,35 @@ bool HArray::dismantling(SegmentPath* path, uint32 pathLen)
 }
 
 bool HArray::delValueByKey(uint32* key,
+						   uint32 keyLen,
+						   uint32 value,
+						   uint32 index)
+{
+	uchar8 valueType;
+
+	uint32 valueList = getValueByKey(key, keyLen, valueType, 0, 0, 0);
+
+	//delete value
+	if (valueType == VALUE_TYPE)
+	{
+		delValueByKey(key, keyLen);
+	}
+	else //VALUE_LIST_TYPE
+	{
+		ValueList* pValueList = valueListPool.fromSerPointer(valueList);
+		pValueList->delValue(value, index);
+
+		//TODO implement count == 0 as IsEmpty
+		if (pValueList->Count == 0)
+		{
+			valueListPool.releaseObject(pValueList);
+
+			delValueByKey(key, keyLen);
+		}
+	}
+}
+
+bool HArray::delValueByKey(uint32* key,
 						   uint32 keyLen)
 {
 	//EXTRACT PATH =============================================================================================
@@ -1140,3 +1169,5 @@ DISMANTLING:
 
 	return true;
 }
+
+

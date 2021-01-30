@@ -25,6 +25,7 @@
 
 #include "HArrayBase.h"
 #include "ReadList.h"
+#include "AttrValuesPool.h"
 
 class HArray
 {
@@ -76,6 +77,12 @@ public:
 
 	uint32 ValueLen;
 	uint32 NewParentID;
+
+	//support value lists
+	bool AllowValueList;
+
+	ValueListPool valueListPool;
+	AttrValuesPool attrValuesPool;
 
 	uint32 MAX_SAFE_SHORT;
 
@@ -225,14 +232,14 @@ public:
   		{
 			if (fwrite(this, sizeof(HArray), 1, pFile) != 1)
 			{
-				goto ERROR;
+				goto HANDLE_ERROR;
 			}
 
     		if(pHeader)
 			{
 				if (fwrite(pHeader, sizeof(uint32), HeaderSize, pFile) != HeaderSize)
 				{
-					goto ERROR;
+					goto HANDLE_ERROR;
 				}
 			}
 
@@ -242,7 +249,7 @@ public:
 				{
 					if (fwrite(pContentPages[i], sizeof(ContentPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -253,7 +260,7 @@ public:
 				{
 					if (fwrite(pVarPages[i], sizeof(VarPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -264,7 +271,7 @@ public:
 				{
 					if (fwrite(pBranchPages[i], sizeof(BranchPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -275,7 +282,7 @@ public:
 				{
 					if (fwrite(pBlockPages[i], sizeof(BlockPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -293,7 +300,7 @@ public:
 			return true;
   		}
 		
-	ERROR:
+	HANDLE_ERROR:
 
 		return false;
 	}
@@ -305,7 +312,7 @@ public:
   		{
 			if (fread(this, sizeof(HArray), 1, pFile) != 1)
 			{
-				goto ERROR;
+				goto HANDLE_ERROR;
 			}
 
     		if(pHeader)
@@ -314,7 +321,7 @@ public:
 
 				if(fread (pHeader, sizeof(uint32), HeaderSize, pFile) != HeaderSize)
 				{
-					goto ERROR;
+					goto HANDLE_ERROR;
 				}
 			}
 
@@ -329,7 +336,7 @@ public:
 
 					if (fread(pContentPages[i], sizeof(ContentPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -345,7 +352,7 @@ public:
 
 					if (fread(pVarPages[i], sizeof(VarPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -361,7 +368,7 @@ public:
 
 					if (fread(pBranchPages[i], sizeof(BranchPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -377,7 +384,7 @@ public:
 
 					if (fread(pBlockPages[i], sizeof(BlockPage), 1, pFile) != 1)
 					{
-						goto ERROR;
+						goto HANDLE_ERROR;
 					}
 				}
 			}
@@ -397,7 +404,7 @@ public:
 			return true;
   		}
 
-	ERROR:
+	HANDLE_ERROR:
 		destroy();
 
 		return false;
@@ -803,11 +810,21 @@ public:
 	
 	//GET =============================================================================================================
 
-	uint32* getValueByKey(uint32* key,
-					      uint32 keyLen);
+	uint32 getValueByKey(uint32* key,
+						  uint32 keyLen,
+						  uchar8& valueType,
+						  uchar8 readModeType,
+						  uchar8 tranID,
+						  ReadList* pReadList);
 
 	bool hasPartKey(uint32* key, uint32 keyLen);
+	
 	bool delValueByKey(uint32* key, uint32 keyLen);
+
+	bool delValueByKey(uint32* key,
+		 			   uint32 keyLen,
+					   uint32 value,
+					   uint32 index);
 
 	static void msleep(uint32 ms)
 	{
@@ -821,7 +838,8 @@ public:
 	}
 
 	//ISREADED ===========================================================================================================
-	inline uint32 processReadByTranID(ContentCell& contentCell,
+	inline uint32 processReadByTranID(uint32* pContentCellValue,
+		std::atomic<uchar8>* pReadByTranID,
 		uchar8 readModeType,
 		uchar8 tranID,
 		ReadList* pReadList)
@@ -830,20 +848,20 @@ public:
 		{
 		case 0: //0. Without any check (ha1)
 		{
-			return contentCell.Value;
+			return *pContentCellValue;
 		}
 		case 1: //1. Read data with check blocking (ha2)
 		{
-			if (contentCell.ReadByTranID.load() != tranID) //not mine blocking
+			if (pReadByTranID->load() != tranID) //not mine blocking
 			{
 				uint32 timeout = 10000;
 
-				while (contentCell.ReadByTranID.load())
+				while (pReadByTranID->load())
 				{
 					if (--timeout)
 					{
-						pReadList->BlockedByTranID = contentCell.ReadByTranID.load();
-						pReadList->BlockedOnValue = contentCell.Value;
+						pReadList->BlockedByTranID = pReadByTranID->load();
+						pReadList->BlockedOnValue = *pContentCellValue;
 
 						msleep(1); //do time for other threads
 					}
@@ -861,24 +879,24 @@ public:
 				}
 			}
 
-			return contentCell.Value;
+			return *pContentCellValue;
 		}
 		case 2: //2. Read data and check blocking and block with put to array blocked cell (ha2)
 		{
-			if (contentCell.ReadByTranID.load() != tranID) //not mine blocking
+			if (pReadByTranID->load() != tranID) //not mine blocking
 			{
 				uint32 timeout = 10000;
 
 				uchar8 val = 0;
 
-				while (!contentCell.ReadByTranID.compare_exchange_weak(val, tranID)) //block
+				while (!pReadByTranID->compare_exchange_weak(val, tranID)) //block
 				{
 					val = 0;
 
 					if (--timeout)
 					{
-						pReadList->BlockedByTranID = contentCell.ReadByTranID.load();
-						pReadList->BlockedOnValue = contentCell.Value;
+						pReadList->BlockedByTranID = pReadByTranID->load();
+						pReadList->BlockedOnValue = *pContentCellValue;
 
 						msleep(1); //do time for other threads
 					}
@@ -895,18 +913,18 @@ public:
 					}
 				}
 
-				pReadList->addValue(&contentCell.ReadByTranID);
+				pReadList->addValue(pReadByTranID);
 			}
 
-			return contentCell.Value;
+			return *pContentCellValue;
 		}
 		case 3: //3. Check if key blocked (ha2 for commit)
 		{
-			return contentCell.ReadByTranID.load();
+			return pReadByTranID->load();
 		}
 		case 4: //4. Check if key blocked, but excluded my cells
 		{
-			if (contentCell.ReadByTranID.load() == tranID)
+			if (pReadByTranID->load() == tranID)
 			{
 				return 0; //mine blocking
 			}

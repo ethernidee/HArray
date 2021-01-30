@@ -170,9 +170,11 @@ struct BlockCell
 
 struct VarCell
 {
+	std::atomic<uchar8> ValueContCellReadByTranID;
 	uchar8 ValueContCellType;
 	uint32 ValueContCellValue;
 	
+	std::atomic<uchar8> ContCellReadByTranID;
 	uchar8 ContCellType;
 	uint32 ContCellValue;
 };
@@ -375,13 +377,13 @@ public:
 		addValue(value);
 	}
 
-	inline void delValue(uint32 value, uint32 index = 0)
+	inline bool delValue(uint32 value, uint32 index = 0)
 	{
 		if (pValues[index] == value) //fast way
 		{
 			pValues[index] = 0;
 
-			return;
+			return true;
 		}
 
 		for (uint32 i = 1; i < Count; i++) //long way
@@ -390,9 +392,11 @@ public:
 			{
 				pValues[i] = 0;
 
-				return;
+				return true;
 			}
 		}
+
+		return false;
 	}
 
 	inline void delValues(ValueList* pValueList)
@@ -605,6 +609,11 @@ public:
 		Count++;
 
 		return pValueList;
+	}
+
+	inline void releaseObject(ValueList* pValueList)
+	{
+		//todo implement
 	}
 
 	inline ValueList* newSerObject(uint32& serPointer)
